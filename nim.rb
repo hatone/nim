@@ -40,8 +40,18 @@ response_positions = connect.get do |request|
   }
 end
 
+response_account = connect.get do |request|
+  request.url "v1/accounts/#{conf['conf']['account']}"
+  request.headers = {
+      'Authorization' => "Bearer #{conf['conf']['token']}"
+  }
+end
+
 orders = JSON.parser.new(response_orders.body).parse
 positions = JSON.parser.new(response_positions.body).parse
+account = JSON.parser.new(response_account.body).parse
+
+margin=(account['marginUsed']/account['balance']*100).to_i
 
 holds=[]
 sholds=[]
@@ -85,6 +95,10 @@ data['signals'].each { |signal|
   if !signal['data']['points']['keytime'].nil?
     next
   end
+
+  if margin >= 50
+    next
+  end
   
   probability = signal['meta']['probability']
   support_y1 = signal['data']['points']['support']['y1']
@@ -94,7 +108,7 @@ data['signals'].each { |signal|
   endtime = signal['data']['patternendtime']
   direction = signal['meta']['direction']
 
-  if bholds.include?(instrument)
+  if holds.include?(instrument)
     next
   end
 
@@ -132,7 +146,7 @@ data['signals'].each { |signal|
           }
           request.body = {
               :instrument => instrument,
-              :units  => 30,
+              :units  => 50,
               :side => :buy,
               :type => :marketIfTouched,
               :expiry => ((Time.now + 3600).utc.to_datetime.rfc3339),
@@ -161,6 +175,10 @@ data['signals'].each { |signal|
     next
   end
 
+  if margin >= 50
+    next
+  end
+
   probability = signal['meta']['probability']
   support_y1 = signal['data']['points']['support']['y1']
   resistance_y1 = signal['data']['points']['resistance']['y1']
@@ -169,7 +187,7 @@ data['signals'].each { |signal|
   endtime = signal['data']['patternendtime']
   direction = signal['meta']['direction']
 
-  if sholds.include?(instrument)
+  if holds.include?(instrument)
     next
   end
 
@@ -207,7 +225,7 @@ data['signals'].each { |signal|
           }
           request.body = {
               :instrument => instrument,
-              :units  => 30,
+              :units  => 50,
               :side => :sell,
               :type => :marketIfTouched,
               :expiry => ((Time.now + 3600).utc.to_datetime.rfc3339),
