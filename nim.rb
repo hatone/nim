@@ -47,9 +47,18 @@ response_account = connect.get do |request|
   }
 end
 
+response_trades = connect.get do |request|
+  request.url "v1/accounts/#{conf['conf']['account']}/trades"
+  request.headers = {
+      'Authorization' => "Bearer #{conf['conf']['token']}"
+  }
+end
+
+
 orders = JSON.parser.new(response_orders.body).parse
 positions = JSON.parser.new(response_positions.body).parse
 account = JSON.parser.new(response_account.body).parse
+trades = JSON.parser.new(response_trades.body).parse
 
 margin=(account['marginUsed']/account['balance']*100).to_i
 
@@ -76,8 +85,36 @@ positions['positions'].each { |position|
 }
 
 p holds
-p bholds
-p sholds
+
+
+p "==================================mod=================================="
+trades['trades'].each { |trade|
+    if(trade['side']=='sell')
+        if( (Time.now - Time.parse(trade['time'])) / (24*60*60) >= 0.5)
+	  
+          instrument = trade['instrument']
+          p instrument
+
+          precision = connect.get do |request|
+            request.url "v1/instruments?accountId=#{conf['conf']['account']}&instruments=#{instrument}&fields=precision"
+            request.headers = {
+              'Authorization' => "Bearer #{conf['conf']['token']}"
+            }
+          end 
+
+          prec_data = JSON.parser.new(precision.body).parse
+          if prec_data['code'] == 43
+            next
+          end
+          p = prec_data['instruments'][0]['precision']
+          p p
+          p trade['price'].to_f
+          prec = p.to_f.to_s.sub("1.0e-","").to_i
+	  p (trade['price'].to_f - p.to_f).round(prec)
+        end
+    end
+}
+
 
 p "==================================buy=================================="
 
@@ -120,6 +157,7 @@ data['signals'].each { |signal|
         p "target price: #{resistance_y1 + (prediction_price - resistance_y1) * 0.2}"
         p Time.at(endtime)
 
+	sleep 1
 	precision = connect.get do |request|
   	  request.url "v1/instruments?accountId=#{conf['conf']['account']}&instruments=#{instrument}&fields=precision"
           request.headers = {
@@ -133,7 +171,7 @@ data['signals'].each { |signal|
           next
         else
 
-        prec_data['instruments'].each { |instrument|
+	prec_data['instruments'].each { |instrument|
                 prec= instrument['precision'].to_f.to_s.sub("1.0e-","").to_i
         }
         p prec
@@ -199,6 +237,7 @@ data['signals'].each { |signal|
         p "target price: #{support_y1 + (prediction_price - support_y1) * 0.2}"
         p Time.at(endtime)
 
+	sleep 1
         precision = connect.get do |request|
           request.url "v1/instruments?accountId=#{conf['conf']['account']}&instruments=#{instrument}&fields=precision"
           request.headers = {
@@ -215,7 +254,6 @@ data['signals'].each { |signal|
 	prec_data['instruments'].each { |instrument|
                 prec= instrument['precision'].to_f.to_s.sub("1.0e-","").to_i
         }
-        p prec
 	end
 
         res = connect.post do |request|
